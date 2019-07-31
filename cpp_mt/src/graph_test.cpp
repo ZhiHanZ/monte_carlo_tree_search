@@ -1,7 +1,9 @@
 #include "graph.h"
+
 #include <gtest/gtest.h>
 #include <iostream>
 #include <string>
+#include <iostream>
 // test whether test can be inited successfully
 TEST(test, init) {
   Board board(2);
@@ -14,7 +16,6 @@ TEST(test, init) {
       ASSERT_EQ(0, board.board_[i][j].p_day_);
     }
   }
-
   Board board2(100);
   ASSERT_EQ(100, board2.board_.size());
   ASSERT_EQ(100, board2.board_[0].size());
@@ -75,9 +76,30 @@ TEST(test, eval2){
   ASSERT_EQ(58, ans.GetResult());
   ASSERT_EQ(true, ans.IsFinished());
   board.board_[1][1].state_ = State::CORN;
+    std::cout << board.toString() << std::endl;
   ans = board.Harvest();
   ASSERT_EQ(54, ans.GetResult());
   ASSERT_EQ(true, ans.IsFinished());
+}
+TEST(test, generator) { 
+  Board board(2);
+  auto p = board.GetNextBoard();
+  ASSERT_EQ(81, p.size()); 
+  vector<string> strs;
+  for(auto elem: p){
+     strs.push_back(elem.toString());
+  }
+  std::sort(strs.begin(), strs.end());
+  strs.erase(std::unique(strs.begin(), strs.end()), strs.end());
+  ASSERT_EQ(81, strs.size()); 
+  board.board_[0][0].state_ = State::CORN;
+  board.board_[1][0].state_ = State::CORN;
+  p = board.GetNextBoard();
+  ASSERT_EQ(9, p.size()); 
+  for(auto elem: p){
+    std::cout << elem.toString() << std::endl;
+  }
+
 }
 // test whether we can add elements (if key exists, do nothing)
 int main(int argc, char *argv[]) {
