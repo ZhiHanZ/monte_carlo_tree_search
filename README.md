@@ -26,5 +26,10 @@ At the 90 day mark, plant can produce **10** units of basic output and cell beco
 
 this agent can **only** get information from simulator.
 
+# installation requirement
+## cpp version
+1. C++ 17
+2. gtest
+
 
 
