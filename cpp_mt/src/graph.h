@@ -33,17 +33,23 @@ class Board {
   unsigned curr_day_;
   // All cells are in the board_
   unsigned empty_cell_ = 0;
-  unsigned nearest_harvest_day_ = 91;
+  unsigned nearest_harvest_day_ = ENDDAY_;
   vector<vector<CellProperty>> board_;
+  int corn_output_ = 0;
+  int bean_output_ = 0;
+  int total_ = 0;
   explicit Board(int n) : curr_day_(0) {
     board_ = vector<vector<CellProperty>>(n, vector<CellProperty>(n));
-    empty_cell_ = n;
+    empty_cell_ = n*n;
   }
   Board(const Board& board) {
     curr_day_ = board.curr_day_;
     board_ = board.board_;
     empty_cell_ = board.empty_cell_;
     nearest_harvest_day_ = board.nearest_harvest_day_;
+    corn_output_ = board.corn_output_;
+    bean_output_ = board.bean_output_;
+    total_ = board.total_;
   }
   string toString(){
     string curr;
@@ -71,17 +77,14 @@ class Board {
     return curr;
   }
   int GetResult() {
-    if (curr_day_ < 91) return -1;
-    int ret = 0;
-    for (unsigned i = 0; i < board_.size(); i++) {
-      for (unsigned j = 0; j < board_[0].size(); j++) {
-        ret += board_[i][j].val_;
-      }
+    if (curr_day_ < ENDDAY_) return -1;
+    if(CanHarvest()){
+      return Harvest().total_;
     }
-    return ret;
+    return total_;
   }
   bool IsFinished() { return GetResult() != -1; }
-  bool IsPlantable() {return empty_cell_ < board_.size();}
+  bool IsPlantable() {return empty_cell_ > 0;}
   bool CanHarvest() {return curr_day_ >= nearest_harvest_day_;}
   bool IsMoveLegal(const int& x, const int& y) {
     const int m = board_.size();
@@ -93,7 +96,7 @@ class Board {
   }
   void EvalBean(const int& i, const int& j) {
     int n = board_.size();
-    if (curr_day_ - board_[i][j].p_day_ >= 90 &&
+    if (curr_day_ - board_[i][j].p_day_ >= CORNDAY_ &&
         board_[i][j].state_ == State::CORN) {
       int val = 10;
       for (int ii = i - 1; ii < i + 2; ii++) {
@@ -104,12 +107,13 @@ class Board {
           }
         }
       }
+      corn_output_ += val;
       board_[i][j].val_ += val;
     }
   }
   void EvalCorn(const int& i, const int& j) {
     int n = board_.size();
-    if (curr_day_ - board_[i][j].p_day_ >= 90 &&
+    if (curr_day_ - board_[i][j].p_day_ >= BEANDAY_ &&
         board_[i][j].state_ == State::BEAN) {
       int val = 10;
       for (int ii = i - 1; ii < i + 2; ii++) {
@@ -121,11 +125,13 @@ class Board {
           }
         }
       }
+      bean_output_ += val;
       board_[i][j].val_ += val;
     }
   }
   Board Harvest() {
     Board ans(*this);
+    int n = board_.size();
     for (unsigned i = 0; i < ans.board_.size(); i++) {
       for (unsigned j = 0; j < ans.board_[0].size(); j++) {
         if (ans.board_[i][j].state_ != State::INIT) {
@@ -134,22 +140,39 @@ class Board {
         }
       }
     }
+    ans.total_ = ans.corn_output_ + ans.bean_output_;
     for (unsigned i = 0; i < ans.board_.size(); i++) {
       for (unsigned j = 0; j < ans.board_[0].size(); j++) {
-        if (ans.board_[i][j].state_ != State::INIT) {
-          ans.board_[i][j].state_ = State::INIT;
-        }
+          if (i >= 0 && j >= 0 && i < n && j < n &&
+              board_[i][j].state_ == State::BEAN) {
+            ans.board_[i][j].state_ = State::INIT;
+            ans.empty_cell_++;
+          }
+          if (i >= 0 && j >= 0 && i < n && j < n &&
+              board_[i][j].state_ == State::CORN) {
+            ans.board_[i][j].state_ = State::INIT;
+            ans.empty_cell_++;
+          }
       }
     }
-    ans.nearest_harvest_day_ += 90;
+    ans.nearest_harvest_day_ = ENDDAY_ + 1; //MAXIMUN
     return ans;
   }
   bool Move(const int& i, const int& j, const unsigned& p_day, const State& state) { 
  //   if(!IsMoveLegal(i, j)){return false;}
+    if(board_[i][j].state_ == state) {return true;}
     board_[i][j].state_ = state;
     board_[i][j].p_day_ = p_day;
-    if(p_day + 90 < nearest_harvest_day_){
-      nearest_harvest_day_ = p_day + 90;
+    if(state != State::INIT){
+      empty_cell_--;
+    }else {
+      empty_cell_++;
+    }
+    if(state == State::CORN && p_day + CORNDAY_ < nearest_harvest_day_){
+      nearest_harvest_day_ = p_day + CORNDAY_;
+    }
+    if(state == State::BEAN && p_day + BEANDAY_ < nearest_harvest_day_){
+      nearest_harvest_day_ = p_day + BEANDAY_;
     }
     return true;
   }
@@ -167,17 +190,25 @@ class Board {
   }
   //next possible node in the next day
   vector<Board> GetNextBoard(){
-    vector<Board> ans;
-    //Helper(ans, 0, 0, 0);
     Board path(*this);
-    auto steps = GetNextStep();
+    auto steps = path.GetNextStep();
+    if(steps.size() == 0 || !IsPlantable()){
+      path.curr_day_ = path.nearest_harvest_day_;
+    }
+    if(CanHarvest()){
+      path = Harvest();
+    }
+    vector<Board> ans;
     dfs(ans, 0, steps, path);
     return ans;
   }
   void dfs(vector<Board>& ans, const int& level, 
            const vector<Cell>& next_step, Board& path){
+    path.curr_day_++;
     ans.push_back(path);
-    for(int i = level; i < next_step.size(); i++){
+    path.curr_day_--;
+    int n = next_step.size();
+    for(int i = level; i < n; i++){
       int ii = next_step[i].x_;
       int jj = next_step[i].y_;
       auto state = path.board_[ii][jj].state_;
@@ -190,61 +221,9 @@ class Board {
       path.Move(ii, jj, p_day, state);
     }
   }
-  void dfs(vector<Board>& ans, const int& level, Board& path){
-    int n = path.board_.size();
-    if(level == n*n){
-      ans.push_back({path});
-      return;
-    }
-    for(int i = level; i < n*n; i++){
-      int ii =  i%n;
-      int jj =  i/n;
-      auto state = path.board_[ii][jj].state_;
-      auto p_day = path.board_[ii][jj].p_day_;
-      if(path.IsMoveLegal(ii, jj)){
-        path.Move(ii, jj, path.curr_day_, State::CORN);
-        dfs(ans, level + 1, path);
-        path.Move(ii, jj, p_day, state);
-        path.Move(ii, jj, path.curr_day_, State::BEAN);
-        dfs(ans, level + 1, path);
-        path.Move(ii, jj, p_day, state);
-        dfs(ans, level + 1, path);
-      }
-    }
-  }
-  void Helper(vector<Board>& ans, const int& i, const int& j, 
-              const int& step){
-    int n = board_.size();
-    if(step == n*n){
-      ans.push_back({*this});
-    }
-    if(IsMoveLegal(i, j)){
-      auto state = board_[i][j].state_;
-      auto p_day = board_[i][j].p_day_;
-      vector<vector<int>> dirs{{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
-      Move(i, j, p_day, State::INIT);
-      for(auto dir: dirs){
-        auto ii = i + dir[0];
-        auto jj = j + dir[1];
-        Helper(ans, ii, jj, step + 1);
-      }
-      Move(i, j,curr_day_, State::CORN);
-      for(auto dir: dirs){
-        auto ii = i + dir[0];
-        auto jj = j + dir[1];
-        Helper(ans, ii, jj, step + 1);
-      }
-      board_[i][j].state_ = state;
-      board_[i][j].p_day_ = p_day;
-      Move(i, j,curr_day_, State::BEAN);
-      for(auto dir: dirs){
-        auto ii = i + dir[0];
-        auto jj = j + dir[1];
-        Helper(ans, ii, jj, step + 1);
-      }
-      board_[i][j].state_ = state;
-      board_[i][j].p_day_ = p_day;
-    }
-  }
+ private:
+  const static int ENDDAY_ =  91;
+  const static int CORNDAY_ = 90;
+  const static int BEANDAY_ = 90;
 };
 #endif  // CPP_MT_SRC_GRAPH_H_
